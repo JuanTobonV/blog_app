@@ -2,17 +2,17 @@ package store
 
 import (
 	"database/sql"
-	"net/http"
 
 	"github.com/JuanTobonV/blog_app/internal/model"
 )
 
 type IUserStore interface { //Definimos el contrato que tendremos de las operaciones de la DB
-	getAll() ([]*model.User, error)
-	getById(id int) (*model.User, error)
-	updateById(id int) (*model.User, error)
-	create(user *model.User) (*model.User, error)
-	delete(id int) (string, error) 
+	GetAll() ([]*model.User, error)
+	GetById(id int) (*model.User, error)
+	UpdateById(user *model.User) (*model.User, error)
+	Create(user *model.User) (*model.User, error)
+	Delete(id int) (string, error) 
+	GetByUsername(username string) (*model.User, error)
 	
 }
 
@@ -26,46 +26,105 @@ func New(db *sql.DB) IUserStore {
 	}
 }
 
-func (s *userStore) create(user *model.User) (*model.User, error) {
-	q := `INSER INTO users (username, password`
-	
-	
-	return nil, nil
+func (s *userStore) Create(user *model.User) (*model.User, error) {
+    // SQL query with placeholders ($1, $2)
+    q := `INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id`
+    
+    // Execute query and scan returned ID into user.Id
+    err := s.db.QueryRow(q, user.Username, user.Password).Scan(&user.Id)
+    
+    if err != nil {
+        return nil, err  // Return error if something fails
+    }
+    
+    return user, nil  // Return user with new ID
 }
 
 
 
-func (s *userStore) getAll() ([]*model.User, error) {
-	q := `SELECT id, username, blogs FROM users`
+func (s *userStore) GetAll() ([]*model.User, error) {
+    // Select only columns that exist in users table
+    q := `SELECT id, username FROM users`
+    
+    rows, err := s.db.Query(q)  // Execute query, get multiple rows
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()  // Always close rows when done
+    
+    var users []*model.User  // Create empty slice of user pointers
+    
+    // Loop through each row
+    for rows.Next() {
+        u := &model.User{}  // Create new user for each row
+        
+        // Scan columns into user fields
+        if err := rows.Scan(&u.Id, &u.Username); err != nil {
+            return nil, err
+        }
+        
+        users = append(users, u)  // Add user to slice
+    }
+    
+    return users, nil
+}
 
-	rows, err := s.db.Query(q)
+
+func (s *userStore) GetById(id int) (*model.User, error){
+	 q := `SELECT id, username, password FROM users WHERE id = $1`
+
+	 user := &model.User{}
+
+	 err := s.db.QueryRow(q, id).Scan(&user.Id, &user.Username, &user.Password)
+
+	 if err == sql.ErrNoRows {
+		return nil, nil
+	 }
+
+	 if err != nil {
+		return nil, err
+	 }
+
+	 return user, nil
+}
+
+func (s *userStore) GetByUsername(username string) (*model.User, error) {
+	q := `SELECT id, username, password FROM users WHERE username = $1`
+
+	user := &model.User{}
+
+	err := s.db.QueryRow(q, username).Scan(&user.Id, &user.Username, &user.Password)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
 
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
-
-	defer rows.Close()
-
-	var users []*model.User
-
-	for rows.Next() { //Next prepares the next result row for reading with the [Rows.Scan] method. It returns true on success, or false if there is no next result row or an error happened while preparing it. [Rows.Err] should be consulted to distinguish between the two cases.
-		u := &model.User{} // instanciamos el usuario
-
-		if err := rows.Scan(&u.Id, &u.Username, &u.Blogs); err != nil {
-			return nil, err
-		}
-
-		users = append(users, u)
-	}
-
-	return users, nil
-
+	return user, nil
 }
 
+func (s *userStore) UpdateById(user *model.User) (*model.User, error){ 
+	q := `UPDATE users SET username = $1, password = $2 WHERE id = $3`
 
-func (s * userStore) getById(id int) (*model.User, error){ return nil, nil}
+	_, err := s.db.Exec(q, user.Username, user.Password, user.Id)
 
-func (s * userStore) updateById(id int) (*model.User, error){ return nil, nil}
-func (s * userStore) delete(id int) (string, error) { return "", nil}
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+func (s *userStore) Delete(id int) (string, error) { 
+
+	q := `DELETE FROM users WHERE id = $1`
+
+	_, err := s.db.Exec(q, id)
+
+	return "User deleted sucessfully!", err
+
+}
 
 
