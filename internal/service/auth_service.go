@@ -15,6 +15,8 @@ type IAuthService interface {
 	Register(username, password string) (*model.User, error)
 	Login(username, login string) (string, error) //returns JWT token
 	ValidateToken(tokenString string) (*jwt.Token, error)
+	GetUserIDFromToken(tokenString string) (int, error)
+
 }
 
 type authService struct {
